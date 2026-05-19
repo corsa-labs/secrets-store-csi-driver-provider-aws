@@ -3024,3 +3024,43 @@ func TestAppID(t *testing.T) {
 		})
 	}
 }
+
+func TestDotEnvFile(t *testing.T) {
+	tst := testCase{
+		testName:   "DotEnv",
+		attributes: stdAttributes,
+		mountObjs: []map[string]interface{}{
+			{"objectName": "MY_SECRET", "objectType": "secretsmanager"},
+			{"objectName": "OTHER_SECRET", "objectType": "secretsmanager"},
+		},
+		ssmRsp: []*ssm.GetParametersOutput{},
+		gsvRsp: []*secretsmanager.GetSecretValueOutput{
+			{SecretString: aws.String("supersecret"), VersionId: aws.String("1")},
+			{SecretString: aws.String("anothersecret"), VersionId: aws.String("2")},
+		},
+		descRsp:    []*secretsmanager.DescribeSecretOutput{},
+		expSecrets: map[string]string{},
+		perms:      "420",
+	}
+
+	dir := t.TempDir()
+	svr := newServerWithMocks(&tst, false, nil)
+	req := buildMountReq(t, dir, tst, []*v1alpha1.ObjectVersion{})
+	_, err := svr.Mount(context.Background(), req)
+	if err != nil {
+		t.Fatalf("Mount failed: %s", err)
+	}
+
+	content, err := os.ReadFile(filepath.Join(dir, ".env"))
+	if err != nil {
+		t.Fatalf("Failed to read .env: %s", err)
+	}
+
+	got := string(content)
+	if !strings.Contains(got, "MY_SECRET=supersecret") {
+		t.Errorf(".env missing MY_SECRET, got:\n%s", got)
+	}
+	if !strings.Contains(got, "OTHER_SECRET=anothersecret") {
+		t.Errorf(".env missing OTHER_SECRET, got:\n%s", got)
+	}
+}

@@ -219,6 +219,11 @@ func (s *CSIDriverProviderServer) Mount(ctx context.Context, req *v1alpha1.Mount
 		}
 	}
 
+	// Write a .env file containing all secrets as KEY=VALUE pairs.
+	if err := s.writeDotEnv(mountDir, fetchedSecrets); err != nil {
+		return nil, err
+	}
+
 	// Build the version response from the current version map and return it.
 	var ov []*v1alpha1.ObjectVersion
 	for id := range curVerMap {
@@ -368,6 +373,15 @@ func (s *CSIDriverProviderServer) getRegionFromNode(ctx context.Context, namespa
 	}
 
 	return region, nil
+}
+
+// Private helper to write a .env file containing all secrets as KEY=VALUE pairs.
+func (s *CSIDriverProviderServer) writeDotEnv(mountDir string, secrets []*provider.SecretValue) error {
+	var lines []string
+	for _, secret := range secrets {
+		lines = append(lines, fmt.Sprintf("%s=%s", secret.Descriptor.GetFileName(), secret.Value))
+	}
+	return os.WriteFile(mountDir+"/.env", []byte(strings.Join(lines, "\n")+"\n"), 0644)
 }
 
 // Private helper to write a new secret or perform an update on a previously mounted secret.
